@@ -55,50 +55,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Configurar event listeners adicionales
     setupAdditionalEventListeners();
-
-    // Configurar botón para mostrar alertas de cumpleaños
-const showBirthdaysBtn = document.getElementById('showBirthdaysThisMonth');
-if (showBirthdaysBtn) {
-    showBirthdaysBtn.addEventListener('click', showBirthdaysModal);
-}
-
-// Función para mostrar modal de cumpleaños
-window.showBirthdaysModal = function() {
-    const users = getAllUsers();
-    const today = new Date();
-    const thisMonth = today.getMonth();
-    
-    const birthdaysThisMonth = users.filter(user => {
-        if (!user.birthdate) return false;
-        const birthdate = new Date(user.birthdate);
-        return birthdate.getMonth() === thisMonth;
-    });
-    
-    if (birthdaysThisMonth.length === 0) {
-        alert('No hay cumpleaños este mes');
-        return;
-    }
-    
-    // Ordenar por día del mes
-    birthdaysThisMonth.sort((a, b) => {
-        const dateA = new Date(a.birthdate).getDate();
-        const dateB = new Date(b.birthdate).getDate();
-        return dateA - dateB;
-    });
-    
-    // Aquí podrías crear un modal o mostrar en una alerta
-    let message = '🎂 Cumpleaños este mes:\n\n';
-    birthdaysThisMonth.forEach(user => {
-        const birthdate = new Date(user.birthdate);
-        const day = birthdate.getDate();
-        const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-        const month = monthNames[birthdate.getMonth()];
-        
-        message += `${user.name} - ${day} de ${month}\n`;
-    });
-    
-    alert(message);
-};
     
     // Actualizar información del sistema
     updateSystemInfo();
