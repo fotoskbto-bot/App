@@ -1,4 +1,4 @@
-// Funciones de utilidad
+// utils.js - Funciones de utilidad mejoradas para manejo de fechas
 
 // Mostrar notificación de respaldo
 export function showBackupNotification(message) {
@@ -116,57 +116,286 @@ export function formatCurrency(amount) {
     }).format(amount);
 }
 
-// Formatear fecha
+// NUEVA: Función auxiliar para parsear fecha en formato DD/MM/YYYY
+function parseDDMMYYYY(dateStr) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Meses en JS van de 0 a 11
+        let year = parseInt(parts[2], 10);
+        
+        // Manejar años de 2 dígitos
+        if (year < 100) {
+            year = 2000 + year;
+        }
+        
+        // Validar valores
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+            return new Date(year, month, day);
+        }
+    }
+    return null;
+}
+
+// NUEVA: Función auxiliar para parsear fecha en formato MM/DD/YYYY
+function parseMMDDYYYY(dateStr) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        const month = parseInt(parts[0], 10) - 1;
+        const day = parseInt(parts[1], 10);
+        let year = parseInt(parts[2], 10);
+        
+        // Manejar años de 2 dígitos
+        if (year < 100) {
+            year = 2000 + year;
+        }
+        
+        // Validar valores
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+            return new Date(year, month, day);
+        }
+    }
+    return null;
+}
+
+// NUEVA: Función auxiliar para parsear fecha en formato YYYY/MM/DD
+function parseYYYYMMDD(dateStr) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+        
+        // Manejar años de 2 dígitos
+        const fullYear = year < 100 ? 2000 + year : year;
+        
+        // Validar valores
+        if (month >= 0 && month <= 11 && day >= 1 && day <= 31) {
+            return new Date(fullYear, month, day);
+        }
+    }
+    return null;
+}
+
+// NUEVA: Función auxiliar para convertir número de serie de Excel a fecha
+function excelSerialToDate(serial) {
+    // Excel para Windows: 1 = 1 de enero de 1900
+    // Excel para Mac: 1 = 1 de enero de 1904
+    // Vamos a manejar Windows (más común)
+    
+    const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899
+    const date = new Date(excelEpoch.getTime() + (serial - 1) * 24 * 60 * 60 * 1000);
+    
+    // Ajustar por error de Excel (considera 1900 como año bisiesto)
+    if (serial > 60) {
+        date.setDate(date.getDate() - 1);
+    }
+    
+    return date;
+}
+
+// MEJORADA: Función para convertir fechas de Excel a ISO
+export function excelDateToISO(excelDate) {
+    try {
+        if (excelDate === null || excelDate === undefined || excelDate === '') {
+            return '';
+        }
+        
+        // Si ya es un string en formato ISO (YYYY-MM-DD)
+        if (typeof excelDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(excelDate)) {
+            return excelDate;
+        }
+        
+        // Si es un número (fecha serial de Excel)
+        if (typeof excelDate === 'number') {
+            const date = excelSerialToDate(excelDate);
+            if (date && !isNaN(date.getTime())) {
+                return date.toISOString().split('T')[0];
+            }
+            return '';
+        }
+        
+        // Si es un objeto Date
+        if (excelDate instanceof Date) {
+            if (isNaN(excelDate.getTime())) return '';
+            return excelDate.toISOString().split('T')[0];
+        }
+        
+        // Si es string
+        if (typeof excelDate === 'string') {
+            const str = excelDate.toString().trim();
+            if (str === '') return '';
+            
+            // Intentar varios formatos conocidos
+            
+            // 1. Formato ISO (YYYY-MM-DD)
+            if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+                return str;
+            }
+            
+            // 2. Formato DD/MM/YYYY (más común en español)
+            if (str.includes('/')) {
+                // Intentar como DD/MM/YYYY
+                let date = parseDDMMYYYY(str);
+                if (date && !isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+                
+                // Intentar como MM/DD/YYYY
+                date = parseMMDDYYYY(str);
+                if (date && !isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+                
+                // Intentar como YYYY/MM/DD
+                date = parseYYYYMMDD(str);
+                if (date && !isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            }
+            
+            // 3. Formato con guiones (DD-MM-YYYY o YYYY-MM-DD)
+            if (str.includes('-') && !/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+                // Reemplazar guiones por slashes y tratar como formato de fecha
+                const withSlashes = str.replace(/-/g, '/');
+                
+                let date = parseDDMMYYYY(withSlashes);
+                if (date && !isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+                
+                date = parseMMDDYYYY(withSlashes);
+                if (date && !isNaN(date.getTime())) {
+                    return date.toISOString().split('T')[0];
+                }
+            }
+            
+            // 4. Intentar parsear como fecha estándar de JavaScript
+            const jsDate = new Date(str);
+            if (!isNaN(jsDate.getTime())) {
+                return jsDate.toISOString().split('T')[0];
+            }
+        }
+        
+        console.warn('No se pudo convertir la fecha:', excelDate);
+        return '';
+    } catch (error) {
+        console.error('Error convirtiendo fecha de Excel:', excelDate, error);
+        return '';
+    }
+}
+
+// MEJORADA: Función para normalizar cualquier fecha a formato ISO
+export function normalizeDate(dateValue) {
+    try {
+        if (!dateValue) return '';
+        
+        // Si ya es un string en formato ISO
+        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+            return dateValue;
+        }
+        
+        // Si es un objeto Date válido
+        if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+            return dateValue.toISOString().split('T')[0];
+        }
+        
+        // Si es un número (posible serial de Excel)
+        if (typeof dateValue === 'number') {
+            const isoDate = excelDateToISO(dateValue);
+            if (isoDate) return isoDate;
+        }
+        
+        // Si es un string, intentar varios enfoques
+        if (typeof dateValue === 'string') {
+            const str = dateValue.toString().trim();
+            
+            // Intento 1: Convertir desde Excel
+            const excelDate = excelDateToISO(str);
+            if (excelDate) {
+                return excelDate;
+            }
+            
+            // Intento 2: Parsear como fecha de JavaScript
+            const jsDate = new Date(str);
+            if (!isNaN(jsDate.getTime())) {
+                return jsDate.toISOString().split('T')[0];
+            }
+        }
+        
+        // Último recurso: intentar convertir cualquier cosa
+        return excelDateToISO(dateValue);
+    } catch (error) {
+        console.error('Error normalizando fecha:', dateValue, error);
+        return '';
+    }
+}
+
+// MEJORADA: Función para formatear fecha para Excel
+export function formatDateForExcel(dateString) {
+    if (!dateString) return '';
+    
+    try {
+        // Normalizar la fecha primero
+        const isoDate = normalizeDate(dateString);
+        if (!isoDate) return '';
+        
+        // Extraer partes de la fecha ISO
+        const [year, month, day] = isoDate.split('-');
+        
+        // Retornar en formato DD/MM/YYYY (formato español común)
+        return `${day}/${month}/${year}`;
+    } catch (error) {
+        console.error('Error formateando fecha para Excel:', dateString, error);
+        return '';
+    }
+}
+
+// MEJORADA: Función para formatear fecha (sin problemas de zona horaria)
 export function formatDate(dateString) {
     if (!dateString) return '';
+    
     try {
-        const date = new Date(dateString);
-        // Ajustar por zona horaria
-        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-        return date.toLocaleDateString('es-CO', {
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric'
-        });
+        // Normalizar la fecha primero
+        const isoDate = normalizeDate(dateString);
+        if (!isoDate) return '';
+        
+        // Extraer partes
+        const [year, month, day] = isoDate.split('-');
+        
+        // Retornar en formato DD/MM/YYYY
+        return `${day}/${month}/${year}`;
     } catch (error) {
         console.error('Error formateando fecha:', dateString, error);
         return '';
     }
 }
 
-// Formatear fecha para WhatsApp
+// MEJORADA: Función para formatear fecha para WhatsApp
 export function formatDateForWhatsApp(dateString) {
-    if (!dateString) return '';
-    try {
-        const date = new Date(dateString);
-        // Ajustar por zona horaria
-        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-        return date.toLocaleDateString('es-CO', {
-            day: '2-digit',
-            month: 'long',
-            year: 'numeric'
-        });
-    } catch (error) {
-        console.error('Error formateando fecha para WhatsApp:', dateString, error);
-        return '';
-    }
-}
-
-// Formatear fecha para Excel (formato dd/mm/aaaa)
-export function formatDateForExcel(dateString) {
     if (!dateString) return '';
     
     try {
-        const date = new Date(dateString);
+        // Normalizar la fecha primero
+        const isoDate = normalizeDate(dateString);
+        if (!isoDate) return '';
+        
+        const date = new Date(isoDate);
         if (isNaN(date.getTime())) return '';
         
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        // Nombres de los meses en español
+        const months = [
+            'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+            'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+        ];
+        
+        const day = date.getDate();
+        const monthName = months[date.getMonth()];
         const year = date.getFullYear();
         
-        return `${day}/${month}/${year}`;
+        return `${day} de ${monthName} de ${year}`;
     } catch (error) {
-        console.error('Error formateando fecha para Excel:', dateString, error);
+        console.error('Error formateando fecha para WhatsApp:', dateString, error);
         return '';
     }
 }
@@ -184,173 +413,112 @@ export function filterList(items, searchText, fields) {
     });
 }
 
-// Convertir fecha de Excel a formato ISO
-export function excelDateToISO(excelDate) {
-    try {
-        if (!excelDate) return '';
-        
-        // Si ya es un string con formato de fecha
-        if (typeof excelDate === 'string') {
-            // Intentar parsear como fecha directamente
-            const date = new Date(excelDate);
-            if (!isNaN(date.getTime())) {
-                return date.toISOString().split('T')[0];
-            }
-            
-            // Si es formato dd/mm/aaaa
-            if (excelDate.includes('/')) {
-                const parts = excelDate.split('/');
-                if (parts.length === 3) {
-                    const day = parts[0].padStart(2, '0');
-                    const month = parts[1].padStart(2, '0');
-                    const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
-                    return `${year}-${month}-${day}`;
-                }
-            }
-            
-            // Si es formato mm/dd/aaaa
-            if (excelDate.includes('-')) {
-                const parts = excelDate.split('-');
-                if (parts.length === 3) {
-                    // Verificar si el primer elemento es año (4 dígitos)
-                    if (parts[0].length === 4) {
-                        // Formato YYYY-MM-DD
-                        return excelDate;
-                    } else {
-                        // Formato MM-DD-YYYY o DD-MM-YYYY
-                        // Intentar determinar el formato
-                        if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
-                            // Si el primer número es mayor a 12, probablemente es día
-                            if (parseInt(parts[0]) > 12) {
-                                // Formato DD-MM-YYYY
-                                const day = parts[0].padStart(2, '0');
-                                const month = parts[1].padStart(2, '0');
-                                const year = parts[2];
-                                return `${year}-${month}-${day}`;
-                            } else {
-                                // Formato MM-DD-YYYY
-                                const month = parts[0].padStart(2, '0');
-                                const day = parts[1].padStart(2, '0');
-                                const year = parts[2];
-                                return `${year}-${month}-${day}`;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // Si es formato aaaa/mm/dd
-            if (excelDate.includes('/') && excelDate.split('/')[0].length === 4) {
-                const parts = excelDate.split('/');
-                if (parts.length === 3) {
-                    const year = parts[0];
-                    const month = parts[1].padStart(2, '0');
-                    const day = parts[2].padStart(2, '0');
-                    return `${year}-${month}-${day}`;
-                }
-            }
-        }
-        
-        // Si es un número (fecha serial de Excel)
-        if (typeof excelDate === 'number') {
-            // Excel usa un sistema donde 1 = 1 de enero de 1900
-            const excelEpoch = new Date(1899, 11, 30); // 30 de diciembre de 1899
-            const date = new Date(excelEpoch.getTime() + excelDate * 24 * 60 * 60 * 1000);
-            return date.toISOString().split('T')[0];
-        }
-        
-        // Si es un objeto Date
-        if (excelDate instanceof Date) {
-            return excelDate.toISOString().split('T')[0];
-        }
-        
-        return '';
-    } catch (error) {
-        console.error('Error convirtiendo fecha de Excel:', excelDate, error);
-        return '';
-    }
-}
-
-// Convertir cualquier fecha a formato ISO
-export function normalizeDate(dateValue) {
-    try {
-        if (!dateValue) return '';
-        
-        // Si ya está en formato ISO
-        if (typeof dateValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-            return dateValue;
-        }
-        
-        // Si es una fecha válida pero en otro formato
-        const date = new Date(dateValue);
-        if (!isNaN(date.getTime())) {
-            return date.toISOString().split('T')[0];
-        }
-        
-        // Usar la función de conversión de Excel
-        return excelDateToISO(dateValue);
-    } catch (error) {
-        console.error('Error normalizando fecha:', dateValue, error);
-        return '';
-    }
-}
-
 // Limpiar y validar datos restaurados
 export function cleanRestoredData(data, type) {
     if (!Array.isArray(data)) return [];
     
-    return data.map(item => {
-        if (!item) return item;
-        
-        // Para usuarios
-        if (type === 'users') {
-            return {
-                ...item,
-                id: item.id || item.ID || Date.now() + Math.random(),
-                name: item.name || item.Nombre || '',
-                document: item.document || item.Documento || '',
-                birthdate: normalizeDate(item.birthdate || item['Fecha Nacimiento']),
-                phone: item.phone || item.Telefono || '',
-                eps: item.eps || item.EPS || '',
-                rh: item.rh || item.RH || '',
-                pathology: item.pathology || item.Patologia || '',
-                emergencyContact: item.emergencyContact || item['Contacto Emergencia'] || '',
-                emergencyPhone: item.emergencyPhone || item['Telefono Emergencia'] || '',
-                classTime: item.classTime || item.Clase || '',
-                affiliationType: item.affiliationType || item['Tipo Afiliacion'] || '',
-                status: (item.status || item.Estado || 'active').toLowerCase(),
-                createdAt: normalizeDate(item.createdAt || item['Fecha Registro']) || new Date().toISOString()
-            };
+    console.log(`Limpieza de datos ${type}: ${data.length} registros`);
+    
+    const cleanedData = data.map((item, index) => {
+        try {
+            if (!item) {
+                console.warn(`Registro ${index} en ${type} es nulo, se omitirá`);
+                return null;
+            }
+            
+            // Para usuarios
+            if (type === 'users') {
+                const cleaned = {
+                    id: item.id || item.ID || item.id || Date.now() + Math.random(),
+                    name: item.name || item.Nombre || item.name || '',
+                    document: item.document || item.Documento || item.document || '',
+                    birthdate: normalizeDate(item.birthdate || item['Fecha Nacimiento'] || item.birthdate || item['FechaNacimiento']),
+                    phone: item.phone || item.Telefono || item.phone || '',
+                    eps: item.eps || item.EPS || item.eps || '',
+                    rh: item.rh || item.RH || item.rh || '',
+                    pathology: item.pathology || item.Patologia || item.pathology || '',
+                    emergencyContact: item.emergencyContact || item['Contacto Emergencia'] || item.emergencyContact || item['ContactoEmergencia'] || '',
+                    emergencyPhone: item.emergencyPhone || item['Telefono Emergencia'] || item.emergencyPhone || item['TelefonoEmergencia'] || '',
+                    classTime: item.classTime || item.Clase || item.classTime || '',
+                    affiliationType: item.affiliationType || item['Tipo Afiliacion'] || item.affiliationType || item['TipoAfiliacion'] || '',
+                    status: (item.status || item.Estado || item.status || 'active').toLowerCase(),
+                    createdAt: normalizeDate(item.createdAt || item['Fecha Registro'] || item.createdAt || item['FechaRegistro']) || new Date().toISOString()
+                };
+                
+                // Validar datos críticos
+                if (!cleaned.name || cleaned.name.trim() === '') {
+                    console.warn(`Usuario ${index} sin nombre, se asignará nombre genérico`);
+                    cleaned.name = `Usuario ${cleaned.id}`;
+                }
+                
+                return cleaned;
+            }
+            
+            // Para asistencias
+            if (type === 'attendance') {
+                const cleaned = {
+                    id: item.id || item.ID || item.id || Date.now() + Math.random(),
+                    userId: item.userId || item.UsuarioID || item.userId || '',
+                    date: normalizeDate(item.date || item.Fecha || item.date),
+                    status: (item.status || item.Estado || item.status || 'presente').toLowerCase(),
+                    registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro'] || item.registeredAt || item['FechaRegistro']) || new Date().toISOString()
+                };
+                
+                // Validar datos críticos
+                if (!cleaned.userId) {
+                    console.warn(`Asistencia ${index} sin userId, se omitirá`);
+                    return null;
+                }
+                
+                if (!cleaned.date) {
+                    console.warn(`Asistencia ${index} sin fecha, se usará fecha actual`);
+                    cleaned.date = new Date().toISOString().split('T')[0];
+                }
+                
+                return cleaned;
+            }
+            
+            // Para pagos
+            if (type === 'income') {
+                const cleaned = {
+                    id: item.id || item.ID || item.id || Date.now() + Math.random(),
+                    userId: item.userId || item.UsuarioID || item.userId || '',
+                    paymentDate: normalizeDate(item.paymentDate || item['Fecha Pago'] || item.paymentDate || item['FechaPago']),
+                    startDate: normalizeDate(item.startDate || item['Fecha Inicio'] || item.startDate || item['FechaInicio']),
+                    endDate: normalizeDate(item.endDate || item['Fecha Fin'] || item.endDate || item['FechaFin']),
+                    paymentType: item.paymentType || item['Tipo Pago'] || item.paymentType || item['TipoPago'] || '',
+                    amount: parseFloat(item.amount || item.Monto || item.amount || 0),
+                    description: item.description || item.Descripción || item.description || '',
+                    registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro'] || item.registeredAt || item['FechaRegistro']) || new Date().toISOString()
+                };
+                
+                // Validar datos críticos
+                if (!cleaned.userId) {
+                    console.warn(`Pago ${index} sin userId, se omitirá`);
+                    return null;
+                }
+                
+                if (isNaN(cleaned.amount) || cleaned.amount <= 0) {
+                    console.warn(`Pago ${index} tiene monto inválido: ${cleaned.amount}`);
+                    cleaned.amount = 0;
+                }
+                
+                return cleaned;
+            }
+            
+            console.warn(`Tipo de dato desconocido: ${type}, registro ${index} se omitirá`);
+            return null;
+            
+        } catch (error) {
+            console.error(`Error limpiando registro ${index} de tipo ${type}:`, error, item);
+            return null;
         }
-        
-        // Para asistencias
-        if (type === 'attendance') {
-            return {
-                ...item,
-                id: item.id || item.ID || Date.now() + Math.random(),
-                userId: item.userId || item.UsuarioID || '',
-                date: normalizeDate(item.date || item.Fecha),
-                status: (item.status || item.Estado || 'presente').toLowerCase(),
-                registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro']) || new Date().toISOString()
-            };
-        }
-        
-        // Para pagos
-        if (type === 'income') {
-            return {
-                ...item,
-                id: item.id || item.ID || Date.now() + Math.random(),
-                userId: item.userId || item.UsuarioID || '',
-                paymentDate: normalizeDate(item.paymentDate || item['Fecha Pago']),
-                startDate: normalizeDate(item.startDate || item['Fecha Inicio']),
-                endDate: normalizeDate(item.endDate || item['Fecha Fin']),
-                paymentType: item.paymentType || item['Tipo Pago'] || '',
-                amount: parseFloat(item.amount || item.Monto || 0),
-                description: item.description || item.Descripción || '',
-                registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro']) || new Date().toISOString()
-            };
-        }
-        
-        return item;
     });
+    
+    // Filtrar registros nulos
+    const filteredData = cleanedData.filter(item => item !== null);
+    
+    console.log(`Datos ${type} después de limpiar: ${filteredData.length} registros válidos de ${data.length} originales`);
+    
+    return filteredData;
 }
