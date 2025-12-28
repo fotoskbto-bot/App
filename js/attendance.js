@@ -1,4 +1,3 @@
-import { getAllData, addAttendance } from './utils.js';
 import { Storage, STORAGE_KEYS } from './storage.js';
 import { formatDate, filterList } from './utils.js';
 import { getActiveUsers, getUserById } from './users.js';
@@ -200,7 +199,7 @@ function saveAttendanceHandler() {
             };
             
             attendance.push(attendanceRecord);
-            addAttendance(attendanceRecord);
+            addAttendanceRecord(attendanceRecord);
             savedCount++;
         }
     });
