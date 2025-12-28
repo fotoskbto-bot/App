@@ -201,43 +201,6 @@ function updateWhatsAppLink() {
         document.getElementById('whatsappLink').href = `https://wa.me/57${phone}?text=${encodedMessage}`;
     }
 }
-// Obtener la última membresía de un usuario
-export function getLatestMembership(userId) {
-    const userIncome = income.filter(i => i.userId == userId);
-    if (userIncome.length === 0) return null;
-    
-    // Ordenar por fecha de pago descendente
-    userIncome.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
-    return userIncome[0];
-}
-
-// Obtener clases asistidas después del vencimiento
-export function getPostExpirationAttendance(userId, attendanceRecords) {
-    const latestMembership = getLatestMembership(userId);
-    if (!latestMembership || !latestMembership.endDate) return 0;
-    
-    const endDate = new Date(latestMembership.endDate);
-    endDate.setDate(endDate.getDate() + 1); // Sumar un día
-    
-    return attendanceRecords.filter(a => 
-        a.userId == userId && 
-        a.status === 'presente' &&
-        new Date(a.date) > endDate
-    ).length;
-}
-
-// Verificar estado de membresía
-export function checkMembershipStatus(userId) {
-    const latestMembership = getLatestMembership(userId);
-    if (!latestMembership) return 'sin_pago';
-    
-    const today = new Date();
-    const endDate = new Date(latestMembership.endDate);
-    
-    if (today > endDate) return 'vencida';
-    if (daysUntil(latestMembership.endDate) <= 3) return 'por_vencer';
-    return 'vigente';
-}
 
 // Cargar lista de pagos
 export function loadIncome() {
