@@ -2,6 +2,7 @@ import { formatCurrency, formatDate } from './utils.js';
 import { getActiveUsers } from './users.js';
 import { getAllAttendance } from './attendance.js';
 import { getAllIncome } from './income.js';
+import { Storage, STORAGE_KEYS } from './storage.js';
 
 // Variables para gráficos
 let affiliationChart = null;
@@ -607,5 +608,10 @@ export function updateSystemInfo() {
     if (infoUsers) infoUsers.textContent = users.length;
     if (infoAttendance) infoAttendance.textContent = attendance.length;
     if (infoIncome) infoIncome.textContent = income.length;
-    if (infoLastBackup) infoLastBackup.textContent = Storage.get('lastBackup', 'Nunca');
+    
+    // Usar Storage.get con STORAGE_KEYS
+    if (infoLastBackup) {
+        const lastBackup = Storage.get(STORAGE_KEYS.LAST_BACKUP);
+        infoLastBackup.textContent = lastBackup ? new Date(lastBackup).toLocaleDateString('es-CO') : 'Nunca';
+    }
 }
