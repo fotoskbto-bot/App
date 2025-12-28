@@ -741,4 +741,98 @@ gap: 8px;
     .report-user-count {
 align-self: flex-end;
     }
+
+}
+
+/* Estilos para información de membresía */
+.membership-info {
+    font-size: 0.85rem;
+    padding: 5px;
+    border-radius: 4px;
+    background-color: rgba(39, 249, 212, 0.1);
+    margin-top: 3px;
+}
+
+/* Badge para cumpleaños */
+.badge.bg-birthday {
+    background: linear-gradient(135deg, #FF729F, #FFB347);
+    color: white;
+    font-size: 0.75rem;
+    padding: 3px 8px;
+    margin-left: 5px;
+}
+
+/* Alertas de inasistencias */
+.absence-alert-item {
+    background-color: rgba(255, 193, 7, 0.1);
+    border-left: 4px solid #ffc107;
+    padding: 12px 15px;
+    border-radius: 5px;
+    margin-bottom: 10px;
+}
+
+.absence-alert-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.absence-alert-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.absence-alert-body {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* Hora de clase del usuario */
+.user-class-time {
+    font-size: 0.8rem;
+    color: var(--color-primary);
+    margin-top: 3px;
+}
+
+/* Botón de recordatorio */
+.btn-outline-warning {
+    color: #ffc107;
+    border-color: #ffc107;
+}
+
+.btn-outline-warning:hover {
+    background-color: #ffc107;
+    color: var(--color-dark);
+}
+
+/* Indicadores de estado */
+.text-expired {
+    color: #ff5a8f !important;
+}
+
+.text-about-to-expire {
+    color: #ffc107 !important;
+}
+
+.text-valid {
+    color: #27F9D4 !important;
+}
+
+/* Para el modal de cumpleaños si decides implementarlo */
+.birthday-modal .birthday-user {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.birthday-modal .birthday-user:last-child {
+    border-bottom: none;
+}
+
+.birthday-modal .birthday-icon {
+    font-size: 1.5rem;
+    margin-right: 10px;
+    color: #FF729F;
 }
