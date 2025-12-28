@@ -48,15 +48,15 @@ function setupReportsEventListeners() {
     }
     
     // Generar reporte combinado
-    const generateCombinedReport = document.getElementById('generateCombinedReport');
-    if (generateCombinedReport) {
-        generateCombinedReport.addEventListener('click', generateCombinedReport);
+    const generateCombinedReportBtn = document.getElementById('generateCombinedReport');
+    if (generateCombinedReportBtn) {
+        generateCombinedReportBtn.addEventListener('click', window.generateCombinedReport);
     }
     
     // Exportar reporte combinado
-    const exportCombinedReport = document.getElementById('exportCombinedReport');
-    if (exportCombinedReport) {
-        exportCombinedReport.addEventListener('click', exportCombinedReportToExcel);
+    const exportCombinedReportBtn = document.getElementById('exportCombinedReport');
+    if (exportCombinedReportBtn) {
+        exportCombinedReportBtn.addEventListener('click', window.exportCombinedReportToExcel);
     }
 }
 
@@ -491,7 +491,7 @@ function updateIncomeMonthlyChart(paymentsData, totalAmount) {
 }
 
 // Generar reporte combinado
-function generateCombinedReport() {
+window.generateCombinedReport = function() {
     const userId = document.getElementById('combinedReportUser').value;
     const startDate = document.getElementById('combinedReportStartDate').value;
     const endDate = document.getElementById('combinedReportEndDate').value;
@@ -501,13 +501,18 @@ function generateCombinedReport() {
         return;
     }
     
-    // Filtrar usuarios
+    // Obtener usuarios activos (excluyendo entrenadores)
     let users = getActiveUsers()
         .filter(user => user.affiliationType !== 'Entrenador(a)');
     
+    // Filtrar por usuario si se seleccionó uno
     if (userId) {
-        users = users.filter(u => u.id === userId);
+        users = users.filter(u => u.id == userId);
     }
+    
+    // Obtener datos
+    const attendance = getAllAttendance();
+    const income = getAllIncome();
     
     // Generar reporte
     const combinedReportList = document.getElementById('combinedReportList');
@@ -517,7 +522,7 @@ function generateCombinedReport() {
         if (users.length === 0) {
             combinedReportList.innerHTML = `
                 <tr>
-                    <td colspan="9" class="text-center text-muted">
+                    <td colspan="7" class="text-center text-muted">
                         No hay usuarios activos para mostrar
                     </td>
                 </tr>
@@ -525,39 +530,40 @@ function generateCombinedReport() {
             return;
         }
         
-        const attendance = getAllAttendance();
-        const income = getAllIncome();
-        
         users.forEach(user => {
             // Contar asistencias en el rango de fechas
             const userAttendance = attendance.filter(a => 
-                a.userId === user.id && 
+                a.userId == user.id && 
                 a.status === 'presente' &&
                 a.date >= startDate && 
                 a.date <= endDate
             ).length;
             
-            // Obtener último pago del usuario
-            const userPayments = income.filter(p => p.userId === user.id);
+            // Obtener el último pago del usuario
+            const userPayments = income.filter(p => p.userId == user.id);
             let paymentValidity = 'Sin pago';
             let paymentType = '-';
-            let paymentAmount = '-';
+            let lastPaymentAmount = '-';
             
             if (userPayments.length > 0) {
                 // Ordenar por fecha de pago descendente
                 userPayments.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
                 const lastPayment = userPayments[0];
+                
                 paymentType = lastPayment.paymentType || user.affiliationType || '-';
-                paymentAmount = lastPayment.amount ? formatCurrency(lastPayment.amount) : '-';
+                lastPaymentAmount = lastPayment.amount ? formatCurrency(parseFloat(lastPayment.amount)) : '-';
                 
                 // Formatear vigencia del pago
                 if (lastPayment.startDate && lastPayment.endDate) {
-                    const addOneDay = (date) => {
-                        const d = new Date(date);
-                        d.setDate(d.getDate() + 1);
-                        return d;
+                    // Ajustar fechas sumando un día
+                    const adjustDate = (dateStr) => {
+                        if (!dateStr) return '';
+                        const date = new Date(dateStr);
+                        date.setDate(date.getDate() + 1);
+                        return formatDate(date);
                     };
-                    paymentValidity = `${formatDate(addOneDay(lastPayment.startDate))} - ${formatDate(addOneDay(lastPayment.endDate))}`;
+                    
+                    paymentValidity = `${adjustDate(lastPayment.startDate)} - ${adjustDate(lastPayment.endDate)}`;
                 }
             }
             
@@ -565,17 +571,103 @@ function generateCombinedReport() {
             row.innerHTML = `
                 <td>${user.name}</td>
                 <td>${user.phone || '-'}</td>
-                <td><strong>${userAttendance}</strong>&nbsp;asistencias</td>
+                <td><strong>${userAttendance}</strong> asistencias</td>
                 <td>${paymentValidity}</td>
                 <td>${paymentType}</td>
-                <td>${paymentAmount}</td>
+                <td>${lastPaymentAmount}</td>
                 <td><span class="badge bg-success">Activo</span></td>
             `;
             combinedReportList.appendChild(row);
         });
     }
-}
+};
 
+// Exportar reporte combinado a Excel
+window.exportCombinedReportToExcel = function() {
+    try {
+        const userId = document.getElementById('combinedReportUser').value;
+        const startDate = document.getElementById('combinedReportStartDate').value;
+        const endDate = document.getElementById('combinedReportEndDate').value;
+        
+        if (!startDate || !endDate) {
+            alert('Por favor, genere primero el reporte con un rango de fechas.');
+            return;
+        }
+        
+        // Obtener datos del reporte actual
+        const users = getActiveUsers()
+            .filter(user => user.affiliationType !== 'Entrenador(a)');
+        
+        if (userId) {
+            users = users.filter(u => u.id == userId);
+        }
+        
+        const attendance = getAllAttendance();
+        const income = getAllIncome();
+        
+        // Preparar datos para Excel
+        const reportData = users.map(user => {
+            const userAttendance = attendance.filter(a => 
+                a.userId == user.id && 
+                a.status === 'presente' &&
+                a.date >= startDate && 
+                a.date <= endDate
+            ).length;
+            
+            const userPayments = income.filter(p => p.userId == user.id);
+            let paymentValidity = 'Sin pago';
+            let paymentType = '-';
+            let lastPaymentAmount = 0;
+            
+            if (userPayments.length > 0) {
+                userPayments.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
+                const lastPayment = userPayments[0];
+                
+                paymentType = lastPayment.paymentType || user.affiliationType || '-';
+                lastPaymentAmount = parseFloat(lastPayment.amount) || 0;
+                
+                if (lastPayment.startDate && lastPayment.endDate) {
+                    const adjustDate = (dateStr) => {
+                        if (!dateStr) return '';
+                        const date = new Date(dateStr);
+                        date.setDate(date.getDate() + 1);
+                        return formatDate(date);
+                    };
+                    
+                    paymentValidity = `${adjustDate(lastPayment.startDate)} - ${adjustDate(lastPayment.endDate)}`;
+                }
+            }
+            
+            return {
+                'Usuario': user.name,
+                'Teléfono': user.phone || '',
+                'Asistencias': userAttendance,
+                'Vigencia Pago': paymentValidity,
+                'Tipo Pago': paymentType,
+                'Valor Último Pago': lastPaymentAmount
+            };
+        });
+        
+        // Crear libro de trabajo
+        const workbook = XLSX.utils.book_new();
+        const worksheet = XLSX.utils.json_to_sheet(reportData);
+        
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte Combinado");
+        
+        // Generar nombre de archivo
+        const dateStr = new Date().toISOString().split('T')[0];
+        const timeStr = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' }).replace(/:/g, '-');
+        const filename = `reporte_combinado_${startDate}_a_${endDate}_${dateStr}_${timeStr}.xlsx`;
+        
+        XLSX.writeFile(workbook, filename);
+        
+        alert('Reporte exportado correctamente a Excel.');
+        
+    } catch (error) {
+        console.error('Error al exportar reporte combinado:', error);
+        alert('Error al exportar el reporte: ' + error.message);
+    }
+};
 // Exportar informe de asistencias a Excel
 function exportAttendanceReportToExcel() {
     alert('Funcionalidad de exportación de asistencias a Excel');
