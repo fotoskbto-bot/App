@@ -1,6 +1,7 @@
 import { Storage, STORAGE_KEYS } from './storage.js';
-import { formatDate, filterList } from './utils.js';
+import { formatDate, filterList, checkConsecutiveAbsences as checkConsecutiveAbsencesFunc } from './utils.js';
 import { getActiveUsers, getUserById } from './users.js';
+import { getLatestMembership, getPostExpirationAttendance, checkMembershipStatus } from './income.js';
 
 // Variables locales
 let attendance = [];
@@ -135,9 +136,40 @@ function loadAttendanceByClass() {
 
 // Obtener información de membresía
 function getMembershipInfo(userId) {
-    // Esta función debería implementarse con lógica de membresía
-    // Por ahora, devolvemos un string vacío
-    return '';
+    const latestMembership = getLatestMembership(userId);
+    if (!latestMembership) {
+        return '<div class="text-warning">Sin membresía activa</div>';
+    }
+    
+    const postExpirationCount = getPostExpirationAttendance(userId, attendance);
+    const status = checkMembershipStatus(userId);
+    
+    let statusClass = 'text-success';
+    let statusText = 'Vigente';
+    
+    if (status === 'vencida') {
+        statusClass = 'text-danger';
+        statusText = 'Vencida';
+    } else if (status === 'por_vencer') {
+        statusClass = 'text-warning';
+        statusText = 'Por vencer';
+    }
+    
+    const membershipInfo = `
+        <div class="membership-info">
+            <div class="${statusClass}">
+                <strong>${statusText}</strong> - Vence: ${formatDate(latestMembership.endDate)}
+            </div>
+            ${postExpirationCount > 0 ? 
+                `<div class="text-danger">
+                    <i class="fas fa-exclamation-triangle"></i> 
+                    ${postExpirationCount} clase(s) post vencimiento
+                </div>` : ''
+            }
+        </div>
+    `;
+    
+    return membershipInfo;
 }
 
 // Actualizar estadísticas de asistencia
@@ -314,52 +346,217 @@ function filterAttendanceTable() {
     });
 }
 
-// Verificar inasistencias consecutivas
+// Verificar inasistencias consecutivas (versión mejorada)
 function checkConsecutiveAbsences() {
     const absenceAlertsList = document.getElementById('absenceAlertsList');
     if (!absenceAlertsList) return;
     
-    absenceAlertsList.innerHTML = '<p class="text-muted">No hay alertas de inasistencias en este momento.</p>';
+    const activeUsers = getActiveUsers()
+        .filter(user => user.affiliationType !== 'Entrenador(a)');
+    
+    let alertsHTML = '';
+    let hasAlerts = false;
+    
+    activeUsers.forEach(user => {
+        // Obtener asistencias del usuario
+        const userAttendance = attendance.filter(a => a.userId == user.id);
+        
+        // Verificar inasistencias consecutivas
+        if (checkConsecutiveAbsencesFunc(userAttendance, user.id, 3)) {
+            hasAlerts = true;
+            alertsHTML += `
+                <div class="absence-alert-item">
+                    <div class="absence-alert-header">
+                        <div>
+                            <strong>${user.name}</strong>
+                            <span class="badge bg-danger ms-2">3+ ausencias consecutivas</span>
+                        </div>
+                        <div class="absence-alert-actions">
+                            <button class="btn btn-sm btn-outline-info" onclick="window.showEmergencyInfo('${user.id}')">
+                                <i class="fas fa-first-aid"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-warning" onclick="window.sendAttendanceReminder('${user.id}')">
+                                <i class="fas fa-envelope"></i> Recordatorio
+                            </button>
+                        </div>
+                    </div>
+                    <div class="absence-alert-body">
+                        <small>Clase: ${user.classTime || 'No definida'} | Última asistencia: ${getLastAttendanceDate(user.id)}</small>
+                    </div>
+                </div>
+            `;
+        }
+    });
+    
+    if (hasAlerts) {
+        absenceAlertsList.innerHTML = alertsHTML;
+    } else {
+        absenceAlertsList.innerHTML = '<p class="text-muted">No hay alertas de inasistencias en este momento.</p>';
+    }
 }
 
-// Obtener la última membresía de un usuario
-export function getLatestMembership(userId) {
-    const userIncome = income.filter(i => i.userId == userId);
-    if (userIncome.length === 0) return null;
+// Función auxiliar para obtener última fecha de asistencia
+function getLastAttendanceDate(userId) {
+    const userAttendance = attendance
+        .filter(a => a.userId == userId && a.status === 'presente')
+        .sort((a, b) => new Date(b.date) - new Date(a.date));
     
-    // Ordenar por fecha de pago descendente
-    userIncome.sort((a, b) => new Date(b.paymentDate) - new Date(a.paymentDate));
-    return userIncome[0];
+    return userAttendance.length > 0 ? formatDate(userAttendance[0].date) : 'Nunca';
 }
 
-// Obtener clases asistidas después del vencimiento
-export function getPostExpirationAttendance(userId, attendanceRecords) {
-    const latestMembership = getLatestMembership(userId);
-    if (!latestMembership || !latestMembership.endDate) return 0;
+// Verificar cumpleaños próximos (para mostrar en asistencia)
+function checkUpcomingBirthdays() {
+    const activeUsers = getActiveUsers();
+    const today = new Date();
     
-    const endDate = new Date(latestMembership.endDate);
-    endDate.setDate(endDate.getDate() + 1); // Sumar un día
-    
-    return attendanceRecords.filter(a => 
-        a.userId == userId && 
-        a.status === 'presente' &&
-        new Date(a.date) > endDate
-    ).length;
+    activeUsers.forEach(user => {
+        if (user.birthdate) {
+            const birthday = new Date(user.birthdate);
+            const nextBirthday = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate());
+            
+            // Ajustar si el cumpleaños ya pasó este año
+            if (nextBirthday < today) {
+                nextBirthday.setFullYear(today.getFullYear() + 1);
+            }
+            
+            const daysUntilBirthday = Math.ceil((nextBirthday - today) / (1000 * 60 * 60 * 24));
+            
+            // Mostrar alerta si el cumpleaños es en los próximos 7 días
+            if (daysUntilBirthday <= 7 && daysUntilBirthday >= 0) {
+                console.log(`🎂 ${user.name} cumple en ${daysUntilBirthday} días`);
+                // Podríamos agregar una alerta visual en la interfaz
+            }
+        }
+    });
 }
 
-// Verificar estado de membresía
-export function checkMembershipStatus(userId) {
-    const latestMembership = getLatestMembership(userId);
-    if (!latestMembership) return 'sin_pago';
+// En la función loadAttendanceByClass, agregar verificación de cumpleaños
+function loadAttendanceByClass() {
+    const attendanceDate = document.getElementById('attendanceDate').value;
+    const attendanceUsersList = document.getElementById('attendanceUsersList');
+    if (!attendanceUsersList) return;
+    
+    attendanceUsersList.innerHTML = '';
+
+    const activeUsers = getActiveUsers()
+        .filter(user => user.affiliationType !== 'Entrenador(a)')
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+    let totalUsers = activeUsers.length;
+    let presentUsers = 0;
+
+    activeUsers.forEach(user => {
+        const isPresent = attendance.some(a =>
+            a.userId === user.id &&
+            a.date === attendanceDate &&
+            a.status === 'presente'
+        );
+
+        if (isPresent) presentUsers++;
+
+        // Verificar estado de membresía
+        const membershipInfo = getMembershipInfo(user.id);
+        
+        // Verificar si está próximo el cumpleaños
+        const birthdayBadge = getBirthdayBadge(user.birthdate);
+
+        const userItem = document.createElement('div');
+        userItem.className = 'attendance-user-item';
+        userItem.innerHTML = `
+            <div class="attendance-check-container">
+                <input class="form-check-input attendance-checkbox" type="checkbox" 
+                    id="attendance-${user.id}" 
+                    data-user-id="${user.id}"
+                    ${isPresent ? 'checked' : ''}>
+            </div>
+            <div class="attendance-user-info">
+                <div class="attendance-user-name">
+                    ${user.name} ${birthdayBadge}
+                </div>
+                <div class="attendance-user-details">
+                    ${membershipInfo}
+                    <div class="user-class-time">
+                        <small>${user.classTime || 'Sin clase asignada'}</small>
+                    </div>
+                </div>
+            </div>
+            <div class="attendance-actions">
+                <button class="btn btn-sm btn-outline-info" onclick="window.showEmergencyInfo('${user.id}')">
+                    <i class="fas fa-first-aid"></i>
+                </button>
+                ${!isPresent ? `
+                    <button class="btn btn-sm btn-outline-warning" onclick="window.sendAttendanceReminder('${user.id}')">
+                        <i class="fas fa-bell"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `;
+
+        attendanceUsersList.appendChild(userItem);
+    });
+
+    // Actualizar estadísticas
+    updateAttendanceStats(totalUsers, presentUsers);
+
+    // Agregar event listeners a los checkboxes
+    document.querySelectorAll('.attendance-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', () => updateAttendanceStats(totalUsers));
+    });
+
+    // Verificar inasistencias consecutivas
+    checkConsecutiveAbsences();
+    
+    // Verificar cumpleaños próximos
+    checkUpcomingBirthdays();
+}
+
+// Función para obtener badge de cumpleaños
+function getBirthdayBadge(birthdate) {
+    if (!birthdate) return '';
     
     const today = new Date();
-    const endDate = new Date(latestMembership.endDate);
+    const birthday = new Date(birthdate);
+    const nextBirthday = new Date(today.getFullYear(), birthday.getMonth(), birthday.getDate());
     
-    if (today > endDate) return 'vencida';
-    if (daysUntil(latestMembership.endDate) <= 3) return 'por_vencer';
-    return 'vigente';
+    // Ajustar si el cumpleaños ya pasó este año
+    if (nextBirthday < today) {
+        nextBirthday.setFullYear(today.getFullYear() + 1);
+    }
+    
+    const daysUntilBirthday = Math.ceil((nextBirthday - today) / (1000 * 60 * 60 * 24));
+    
+    if (daysUntilBirthday <= 7 && daysUntilBirthday >= 0) {
+        if (daysUntilBirthday === 0) {
+            return '<span class="badge bg-birthday">🎂 ¡Hoy!</span>';
+        } else if (daysUntilBirthday === 1) {
+            return '<span class="badge bg-birthday">🎂 Mañana</span>';
+        } else {
+            return `<span class="badge bg-birthday">🎂 En ${daysUntilBirthday} días</span>`;
+        }
+    }
+    
+    return '';
 }
 
+// Agregar función global para enviar recordatorios
+window.sendAttendanceReminder = function(userId) {
+    const user = getUserById(userId);
+    if (!user || !user.phone) {
+        alert('Usuario no encontrado o sin número de teléfono');
+        return;
+    }
+    
+    const message = `Hola ${user.name}, te recordamos tu clase de hoy en Antología Box23. ¡Te esperamos!`;
+    
+    // Abrir WhatsApp con el mensaje
+    const encodedMessage = encodeURIComponent(message);
+    window.open(`https://wa.me/57${cleanPhone(user.phone)}?text=${encodedMessage}`, '_blank');
+};
+
+// Función auxiliar para limpiar teléfono (debería estar importada de utils.js)
+function cleanPhone(phone) {
+    return phone ? phone.toString().replace(/\D/g, '') : '';
+}
 // Obtener toda la asistencia
 export function getAllAttendance() {
     return attendance;
