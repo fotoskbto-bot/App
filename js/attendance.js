@@ -342,5 +342,4 @@ export function reloadAttendanceFromStorage() {
     attendance = Storage.get(STORAGE_KEYS.ATTENDANCE, []);
     loadAttendanceByClass();
     loadAttendance();
-}    
 }
