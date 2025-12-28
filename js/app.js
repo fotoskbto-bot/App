@@ -124,7 +124,25 @@ function setupAdditionalEventListeners() {
         }
     });
 }
+// Evento para reporte combinado
+const generateCombinedReportBtn = document.getElementById('generateCombinedReport');
+if (generateCombinedReportBtn) {
+    generateCombinedReportBtn.addEventListener('click', function() {
+        if (window.generateCombinedReport) {
+            window.generateCombinedReport();
+        }
+    });
+}
 
+// Evento para exportar reporte combinado
+const exportCombinedReportBtn = document.getElementById('exportCombinedReport');
+if (exportCombinedReportBtn) {
+    exportCombinedReportBtn.addEventListener('click', function() {
+        if (window.exportCombinedReportToExcel) {
+            window.exportCombinedReportToExcel();
+        }
+    });
+}
 // Respaldar todos los datos
 function backupAllData() {
     try {
