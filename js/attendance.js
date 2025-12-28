@@ -336,10 +336,14 @@ export function getAttendanceByUserId(userId) {
 export function addAttendanceRecord(record) {
     attendance.push(record);
     Storage.set(STORAGE_KEYS.ATTENDANCE, attendance);
+}
 
-    // Recargar asistencia desde localStorage (para restauración)
+// Recargar asistencia desde localStorage (para restauración)
 export function reloadAttendanceFromStorage() {
     attendance = Storage.get(STORAGE_KEYS.ATTENDANCE, []);
     loadAttendanceByClass();
     loadAttendance();
 }
+
+// Exponer funciones globalmente si es necesario
+window.loadAttendance = loadAttendance;
