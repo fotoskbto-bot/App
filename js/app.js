@@ -1,4 +1,4 @@
-import { initUsers, getAllUsers, reloadUsersFromStorage } from './users.js';
+import { initUsers, getAllUsers, reloadUsersFromStorage, getUserById } from './users.js';
 import { initAttendance, getAllAttendance, reloadAttendanceFromStorage } from './attendance.js';
 import { initIncome, getAllIncome, reloadIncomeFromStorage } from './income.js';
 import { initReports, updateSystemInfo } from './reports.js';
@@ -139,16 +139,64 @@ function backupAllData() {
         // Crear un libro de trabajo
         const workbook = XLSX.utils.book_new();
         
+        // Convertir datos a formato español para el archivo Excel
+        const usersSpanish = users.map(user => ({
+            'ID': user.id,
+            'Nombre': user.name,
+            'Documento': user.document || '',
+            'Fecha Nacimiento': user.birthdate || '',
+            'Telefono': user.phone || '',
+            'EPS': user.eps || '',
+            'RH': user.rh || '',
+            'Patologia': user.pathology || '',
+            'Contacto Emergencia': user.emergencyContact || '',
+            'Telefono Emergencia': user.emergencyPhone || '',
+            'Clase': user.classTime || '',
+            'Tipo Afiliacion': user.affiliationType || '',
+            'Estado': user.status || 'active',
+            'Fecha Registro': user.createdAt || ''
+        }));
+        
+        // Para asistencias, necesitamos obtener el nombre del usuario
+        const attendanceSpanish = attendance.map(record => {
+            const user = getUserById(record.userId) || { name: 'Desconocido' };
+            return {
+                'ID': record.id,
+                'UsuarioID': record.userId,
+                'Fecha': record.date,
+                'Usuario': user.name,
+                'Estado': record.status || 'presente',
+                'Fecha Registro': record.registeredAt || ''
+            };
+        });
+        
+        // Para pagos, también necesitamos el nombre del usuario
+        const incomeSpanish = income.map(record => {
+            const user = getUserById(record.userId) || { name: 'Desconocido' };
+            return {
+                'ID': record.id,
+                'UsuarioID': record.userId,
+                'Fecha Pago': record.paymentDate,
+                'Fecha Inicio': record.startDate,
+                'Fecha Fin': record.endDate,
+                'Usuario': user.name,
+                'Monto': record.amount,
+                'Tipo Pago': record.paymentType || '',
+                'Descripción': record.description || '',
+                'Fecha Registro': record.registeredAt || ''
+            };
+        });
+        
         // Hoja de usuarios
-        const usersSheet = XLSX.utils.json_to_sheet(users);
+        const usersSheet = XLSX.utils.json_to_sheet(usersSpanish);
         XLSX.utils.book_append_sheet(workbook, usersSheet, "Usuarios");
         
         // Hoja de asistencias
-        const attendanceSheet = XLSX.utils.json_to_sheet(attendance);
+        const attendanceSheet = XLSX.utils.json_to_sheet(attendanceSpanish);
         XLSX.utils.book_append_sheet(workbook, attendanceSheet, "Asistencias");
         
         // Hoja de pagos
-        const incomeSheet = XLSX.utils.json_to_sheet(income);
+        const incomeSheet = XLSX.utils.json_to_sheet(incomeSpanish);
         XLSX.utils.book_append_sheet(workbook, incomeSheet, "Pagos");
         
         // Generar archivo
@@ -202,11 +250,51 @@ function restoreDataFromFile() {
             }
             
             // Convertir a JSON
-            const users = XLSX.utils.sheet_to_json(usersSheet);
-            const attendance = XLSX.utils.sheet_to_json(attendanceSheet);
-            const income = XLSX.utils.sheet_to_json(incomeSheet);
+            const usersRaw = XLSX.utils.sheet_to_json(usersSheet);
+            const attendanceRaw = XLSX.utils.sheet_to_json(attendanceSheet);
+            const incomeRaw = XLSX.utils.sheet_to_json(incomeSheet);
             
-            console.log(`Datos leídos: ${users.length} usuarios, ${attendance.length} asistencias, ${income.length} pagos`);
+            console.log(`Datos leídos: ${usersRaw.length} usuarios, ${attendanceRaw.length} asistencias, ${incomeRaw.length} pagos`);
+            
+            // Convertir datos a formato de aplicación
+            const users = usersRaw.map(item => ({
+                id: item.ID || item.id,
+                name: item.Nombre || item.name,
+                document: item.Documento || item.document || '',
+                birthdate: item['Fecha Nacimiento'] || item.birthdate || '',
+                phone: item.Telefono || item.phone || '',
+                eps: item.EPS || item.eps || '',
+                rh: item.RH || item.rh || '',
+                pathology: item.Patologia || item.pathology || '',
+                emergencyContact: item['Contacto Emergencia'] || item.emergencyContact || '',
+                emergencyPhone: item['Telefono Emergencia'] || item.emergencyPhone || '',
+                classTime: item.Clase || item.classTime || '',
+                affiliationType: item['Tipo Afiliacion'] || item.affiliationType || '',
+                status: item.Estado || item.status || 'active',
+                createdAt: item['Fecha Registro'] || item.createdAt || new Date().toISOString()
+            }));
+            
+            const attendance = attendanceRaw.map(item => ({
+                id: item.ID || item.id,
+                userId: item.UsuarioID || item.userId,
+                date: item.Fecha || item.date,
+                status: item.Estado || item.status || 'presente',
+                registeredAt: item['Fecha Registro'] || item.registeredAt || new Date().toISOString()
+            }));
+            
+            const income = incomeRaw.map(item => ({
+                id: item.ID || item.id,
+                userId: item.UsuarioID || item.userId,
+                paymentDate: item['Fecha Pago'] || item.paymentDate,
+                startDate: item['Fecha Inicio'] || item.startDate,
+                endDate: item['Fecha Fin'] || item.endDate,
+                paymentType: item['Tipo Pago'] || item.paymentType || '',
+                amount: item.Monto || item.amount || 0,
+                description: item.Descripción || item.description || '',
+                registeredAt: item['Fecha Registro'] || item.registeredAt || new Date().toISOString()
+            }));
+            
+            console.log(`Datos convertidos: ${users.length} usuarios, ${attendance.length} asistencias, ${income.length} pagos`);
             
             // Verificar si se deben reemplazar los datos existentes
             const replaceData = document.getElementById('replaceData').checked;
