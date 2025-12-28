@@ -190,27 +190,43 @@ function filterUsers() {
 // Obtener información de cumpleaños próximos
 function getUpcomingBirthdayInfo(birthdate) {
     if (!birthdate) return null;
-
-    const today = new Date();
-    const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-    const [year, month, day] = birthdate.split('-').map(Number);
-    const birthdayThisYear = new Date(today.getFullYear(), month - 1, day);
-
-    if (birthdayThisYear < todayLocal) {
-        birthdayThisYear.setFullYear(today.getFullYear() + 1);
+    
+    try {
+        // Normalizar la fecha primero
+        const isoDate = normalizeDate(birthdate);
+        if (!isoDate) return null;
+        
+        const today = new Date();
+        const todayISO = today.toISOString().split('T')[0];
+        
+        // Extraer mes y día
+        const [, month, day] = isoDate.split('-');
+        
+        // Crear fecha de cumpleaños para este año
+        const currentYear = today.getFullYear();
+        const birthdayThisYear = new Date(currentYear, month - 1, day);
+        
+        // Si ya pasó este año, usar el próximo año
+        if (birthdayThisYear < today) {
+            birthdayThisYear.setFullYear(currentYear + 1);
+        }
+        
+        const diffTime = birthdayThisYear - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays >= 0 && diffDays <= 3) {
+            return { 
+                daysUntil: diffDays, 
+                date: birthdayThisYear.toISOString().split('T')[0] 
+            };
+        }
+        
+        return null;
+    } catch (error) {
+        console.error('Error calculando cumpleaños:', error);
+        return null;
     }
-
-    const diffTime = birthdayThisYear - todayLocal;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays >= 0 && diffDays <= 3) {
-        return { daysUntil: diffDays, date: birthdayThisYear };
-    }
-
-    return null;
 }
-
 // Mostrar cumpleaños
 function showBirthdays(type) {
     // Esta función se implementará en utils.js
