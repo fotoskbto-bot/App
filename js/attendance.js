@@ -1,6 +1,7 @@
 import { Storage, STORAGE_KEYS } from './storage.js';
-import { formatDate, filterList } from './utils.js';
+import { formatDate } from './utils.js';
 import { getActiveUsers, getUserById } from './users.js';
+import { getMembershipSummary, getMembershipStatus } from './membership.js';
 
 // Variables locales
 let attendance = [];
@@ -93,28 +94,57 @@ function loadAttendanceByClass() {
 
         if (isPresent) presentUsers++;
 
-        // Verificar estado de membresía
-        const membershipInfo = getMembershipInfo(user.id);
+        // Obtener información detallada de membresía
+        const membershipStatus = getMembershipStatus(user.id);
+        const membershipInfo = getMembershipSummary(user.id);
+        
+        // Determinar clase CSS basada en el estado de membresía
+        let userItemClass = 'attendance-user-item';
+        if (membershipStatus.expired) {
+            if (membershipStatus.daysExpired <= 7) {
+                userItemClass += ' membership-warning';
+            } else {
+                userItemClass += ' membership-expired';
+            }
+        } else if (membershipStatus.status.includes('Vence en')) {
+            userItemClass += ' membership-warning';
+        }
 
         const userItem = document.createElement('div');
-        userItem.className = 'attendance-user-item';
+        userItem.className = userItemClass;
         userItem.innerHTML = `
             <div class="attendance-check-container">
                 <input class="form-check-input attendance-checkbox" type="checkbox" 
                     id="attendance-${user.id}" 
                     data-user-id="${user.id}"
-                    ${isPresent ? 'checked' : ''}>
+                    ${isPresent ? 'checked' : ''}
+                    ${membershipStatus.expired && membershipStatus.daysExpired > 7 ? 'disabled' : ''}>
             </div>
             <div class="attendance-user-info">
-                <div class="attendance-user-name">${user.name}</div>
+                <div class="attendance-user-name">
+                    ${user.name}
+                    ${membershipStatus.expired && membershipStatus.daysExpired > 7 ? 
+                      '<i class="fas fa-exclamation-triangle text-warning ms-2" title="Membresía vencida"></i>' : ''}
+                </div>
                 <div class="attendance-user-details">
-                    ${membershipInfo}
+                    <div><strong>Clase:</strong> ${user.classTime || 'Sin clase asignada'}</div>
+                    <div class="membership-info mt-1">
+                        <strong>Membresía:</strong> ${membershipInfo}
+                        ${membershipStatus.attendanceAfterExpiry > 0 ? 
+                          `<br><small class="text-danger"><strong>Clases vencidas:</strong> ${membershipStatus.attendanceAfterExpiry} asistidas después del vencimiento</small>` : ''}
+                        ${membershipStatus.hasMembership ? 
+                          `<br><small class="text-muted"><strong>Vence:</strong> ${membershipStatus.formattedEndDate || 'No definido'}</small>` : ''}
+                    </div>
                 </div>
             </div>
             <div class="attendance-actions">
                 <button class="btn btn-sm btn-outline-info" onclick="window.showEmergencyInfo('${user.id}')">
                     <i class="fas fa-first-aid"></i>
                 </button>
+                ${membershipStatus.expired ? 
+                  `<button class="btn btn-sm btn-outline-warning ms-1" onclick="window.sendPaymentReminder('${user.id}')">
+                    <i class="fas fa-money-bill-wave"></i>
+                  </button>` : ''}
             </div>
         `;
 
@@ -133,11 +163,9 @@ function loadAttendanceByClass() {
     checkConsecutiveAbsences();
 }
 
-// Obtener información de membresía
+// Obtener información de membresía (compatibilidad con versiones anteriores)
 function getMembershipInfo(userId) {
-    // Esta función debería implementarse con lógica de membresía
-    // Por ahora, devolvemos un string vacío
-    return '';
+    return getMembershipSummary(userId);
 }
 
 // Actualizar estadísticas de asistencia
@@ -158,21 +186,22 @@ function updateAttendanceStats(totalUsers, presentUsers = null) {
 
 // Marcar todos presentes
 function markAllPresent() {
-    const checkboxes = document.querySelectorAll('.attendance-checkbox');
+    const checkboxes = document.querySelectorAll('.attendance-checkbox:not(:disabled)');
     checkboxes.forEach(checkbox => {
         checkbox.checked = true;
     });
-    const totalUsers = checkboxes.length;
-    updateAttendanceStats(totalUsers, totalUsers);
+    const totalUsers = document.querySelectorAll('.attendance-checkbox').length;
+    const presentUsers = document.querySelectorAll('.attendance-checkbox:checked:not(:disabled)').length;
+    updateAttendanceStats(totalUsers, presentUsers);
 }
 
 // Limpiar todo
 function clearAllAttendance() {
-    const checkboxes = document.querySelectorAll('.attendance-checkbox');
+    const checkboxes = document.querySelectorAll('.attendance-checkbox:not(:disabled)');
     checkboxes.forEach(checkbox => {
         checkbox.checked = false;
     });
-    const totalUsers = checkboxes.length;
+    const totalUsers = document.querySelectorAll('.attendance-checkbox').length;
     updateAttendanceStats(totalUsers, 0);
 }
 
@@ -188,8 +217,9 @@ function saveAttendanceHandler() {
     checkboxes.forEach(checkbox => {
         const userId = checkbox.dataset.userId;
         const isPresent = checkbox.checked;
-
-        if (isPresent) {
+        
+        // Solo guardar si el checkbox no está deshabilitado
+        if (!checkbox.disabled && isPresent) {
             const attendanceRecord = {
                 id: Date.now() + savedCount,
                 userId: userId,
@@ -211,7 +241,11 @@ function saveAttendanceHandler() {
     loadAttendanceByClass();
     loadAttendance();
 
-    alert(`Asistencias guardadas correctamente. Total: ${savedCount}`);
+    if (savedCount > 0) {
+        alert(`Asistencias guardadas correctamente. Total: ${savedCount}`);
+    } else {
+        alert('No se guardaron asistencias. Verifique que los usuarios tengan membresía vigente.');
+    }
 }
 
 // Cargar lista de asistencias (historial)
@@ -319,8 +353,177 @@ function checkConsecutiveAbsences() {
     const absenceAlertsList = document.getElementById('absenceAlertsList');
     if (!absenceAlertsList) return;
     
-    absenceAlertsList.innerHTML = '<p class="text-muted">No hay alertas de inasistencias en este momento.</p>';
+    absenceAlertsList.innerHTML = '';
+    
+    const users = getActiveUsers()
+        .filter(user => user.affiliationType !== 'Entrenador(a)');
+    
+    if (users.length === 0) {
+        absenceAlertsList.innerHTML = '<p class="text-muted">No hay usuarios activos para verificar.</p>';
+        return;
+    }
+    
+    // Definir umbral de inasistencias consecutivas (puedes ajustar este valor)
+    const CONSECUTIVE_DAYS_THRESHOLD = 3;
+    const DAYS_TO_CHECK = 30; // Revisar los últimos 30 días
+    
+    const today = new Date();
+    const alerts = [];
+    
+    users.forEach(user => {
+        // Obtener asistencias del usuario
+        const userAttendance = attendance.filter(a => 
+            a.userId === user.id && 
+            a.status === 'presente'
+        );
+        
+        // Crear array de fechas de asistencia
+        const attendanceDates = userAttendance.map(a => a.date);
+        
+        // Verificar inasistencias consecutivas
+        let consecutiveAbsences = 0;
+        let maxConsecutiveAbsences = 0;
+        let currentStreakStart = null;
+        
+        // Revisar los últimos DAYS_TO_CHECK días
+        for (let i = 0; i < DAYS_TO_CHECK; i++) {
+            const checkDate = new Date(today);
+            checkDate.setDate(today.getDate() - i);
+            const dateStr = checkDate.toISOString().split('T')[0];
+            
+            // Si el usuario asistió ese día, reiniciar contador
+            if (attendanceDates.includes(dateStr)) {
+                consecutiveAbsences = 0;
+            } else {
+                // Si es la primera inasistencia consecutiva, marcar inicio
+                if (consecutiveAbsences === 0) {
+                    currentStreakStart = dateStr;
+                }
+                consecutiveAbsences++;
+                maxConsecutiveAbsences = Math.max(maxConsecutiveAbsences, consecutiveAbsences);
+            }
+        }
+        
+        // Si supera el umbral, crear alerta
+        if (maxConsecutiveAbsences >= CONSECUTIVE_DAYS_THRESHOLD) {
+            // Encontrar la última fecha de asistencia
+            let lastAttendanceDate = 'Nunca';
+            if (attendanceDates.length > 0) {
+                attendanceDates.sort((a, b) => new Date(b) - new Date(a));
+                lastAttendanceDate = formatDate(attendanceDates[0]);
+            }
+            
+            // Obtener información de membresía
+            const membershipStatus = getMembershipStatus(user.id);
+            
+            alerts.push({
+                user: user,
+                consecutiveAbsences: maxConsecutiveAbsences,
+                lastAttendance: lastAttendanceDate,
+                membershipStatus: membershipStatus,
+                streakStart: currentStreakStart ? formatDate(currentStreakStart) : 'Reciente'
+            });
+        }
+    });
+    
+    // Mostrar alertas
+    if (alerts.length === 0) {
+        absenceAlertsList.innerHTML = `
+            <div class="alert alert-success">
+                <i class="fas fa-check-circle"></i> No hay alertas de inasistencias consecutivas.
+            </div>
+        `;
+        return;
+    }
+    
+    // Ordenar alertas por días de inasistencia (mayor a menor)
+    alerts.sort((a, b) => b.consecutiveAbsences - a.consecutiveAbsences);
+    
+    alerts.forEach(alert => {
+        const alertElement = document.createElement('div');
+        alertElement.className = 'alert alert-warning mb-2';
+        alertElement.innerHTML = `
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h6 class="mb-1">
+                        <i class="fas fa-exclamation-triangle"></i> 
+                        ${alert.user.name}
+                    </h6>
+                    <div class="mb-1">
+                        <span class="badge bg-danger">${alert.consecutiveAbsences} días sin asistir</span>
+                        ${alert.membershipStatus.expired ? 
+                          '<span class="badge bg-danger ms-1">Membresía vencida</span>' : 
+                          '<span class="badge bg-success ms-1">Membresía vigente</span>'}
+                    </div>
+                    <div class="small">
+                        <strong>Última asistencia:</strong> ${alert.lastAttendance}<br>
+                        <strong>Inicio de inasistencia:</strong> ${alert.streakStart}<br>
+                        <strong>Clase habitual:</strong> ${alert.user.classTime || 'No definida'}
+                        ${alert.membershipStatus.attendanceAfterExpiry > 0 ? 
+                          `<br><strong>Clases vencidas:</strong> <span class="text-danger">${alert.membershipStatus.attendanceAfterExpiry} asistidas después del vencimiento</span>` : ''}
+                    </div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-sm btn-outline-warning" onclick="window.sendAbsenceReminder('${alert.user.id}')">
+                        <i class="fab fa-whatsapp"></i> Recordar
+                    </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="window.showEmergencyInfo('${alert.user.id}')">
+                        <i class="fas fa-first-aid"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+        absenceAlertsList.appendChild(alertElement);
+    });
 }
+
+// Función para enviar recordatorio de pago por WhatsApp
+window.sendPaymentReminder = function(userId) {
+    const user = getUserById(userId);
+    if (!user) return;
+    
+    const membershipStatus = getMembershipStatus(userId);
+    
+    const message = `Hola ${user.name}, tu membresía en Antología Box23 venció hace ${membershipStatus.daysExpired} días. 
+Por favor, renueva tu pago para continuar asistiendo a las clases. 
+¡Te esperamos!`;
+    
+    if (user.phone) {
+        const phone = user.phone.replace(/\D/g, '');
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/57${phone}?text=${encodedMessage}`, '_blank');
+    } else {
+        alert('El usuario no tiene número de teléfono registrado.');
+    }
+};
+
+// Función para enviar recordatorio de inasistencia por WhatsApp
+window.sendAbsenceReminder = function(userId) {
+    const user = getUserById(userId);
+    if (!user) return;
+    
+    const membershipStatus = getMembershipStatus(userId);
+    
+    let message = `Hola ${user.name}, te extrañamos en Antología Box23. `;
+    
+    if (membershipStatus.expired) {
+        message += `Notamos que tu membresía venció hace ${membershipStatus.daysExpired} días y que no has asistido últimamente. `;
+        message += `¿Necesitas renovar tu pago o hay algún motivo por el que no has podido asistir? `;
+    } else {
+        message += `Notamos que no has asistido a clases recientemente. `;
+        message += `¿Todo está bien? Esperamos verte pronto en ${user.classTime || 'tu clase habitual'}. `;
+    }
+    
+    message += `¡Tu salud y bienestar son importantes para nosotros!`;
+    
+    if (user.phone) {
+        const phone = user.phone.replace(/\D/g, '');
+        const encodedMessage = encodeURIComponent(message);
+        window.open(`https://wa.me/57${phone}?text=${encodedMessage}`, '_blank');
+    } else {
+        alert('El usuario no tiene número de teléfono registrado.');
+    }
+};
 
 // Obtener toda la asistencia
 export function getAllAttendance() {
@@ -345,5 +548,5 @@ export function reloadAttendanceFromStorage() {
     loadAttendance();
 }
 
-// Exponer funciones globalmente si es necesario
+// Exponer funciones globalmente
 window.loadAttendance = loadAttendance;
