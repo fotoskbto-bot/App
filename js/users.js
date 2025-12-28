@@ -342,3 +342,9 @@ export function addUser(user) {
     saveUsers();
     loadUsers();
 }
+// Recargar usuarios desde localStorage (para restauración)
+export function reloadUsersFromStorage() {
+    users = Storage.get(STORAGE_KEYS.USERS, []);
+    loadUsers();
+    updateUserSelects();
+}
