@@ -2,7 +2,7 @@ import { initUsers, getAllUsers, reloadUsersFromStorage, getUserById } from './u
 import { initAttendance, getAllAttendance, reloadAttendanceFromStorage } from './attendance.js';
 import { initIncome, getAllIncome, reloadIncomeFromStorage } from './income.js';
 import { initReports, updateSystemInfo } from './reports.js';
-import { setupPhoneValidation, showBackupNotification } from './utils.js';
+import { setupPhoneValidation, showBackupNotification, normalizeDate, formatDateForExcel, cleanRestoredData } from './utils.js';
 import { Storage, STORAGE_KEYS } from './storage.js';
 
 // Variables globales compartidas entre módulos
@@ -123,26 +123,28 @@ function setupAdditionalEventListeners() {
             document.getElementById('endDate').value = endDate.toISOString().split('T')[0];
         }
     });
-}
-// Evento para reporte combinado
-const generateCombinedReportBtn = document.getElementById('generateCombinedReport');
-if (generateCombinedReportBtn) {
-    generateCombinedReportBtn.addEventListener('click', function() {
-        if (window.generateCombinedReport) {
-            window.generateCombinedReport();
-        }
-    });
+    
+    // Evento para reporte combinado
+    const generateCombinedReportBtn = document.getElementById('generateCombinedReport');
+    if (generateCombinedReportBtn) {
+        generateCombinedReportBtn.addEventListener('click', function() {
+            if (window.generateCombinedReport) {
+                window.generateCombinedReport();
+            }
+        });
+    }
+
+    // Evento para exportar reporte combinado
+    const exportCombinedReportBtn = document.getElementById('exportCombinedReport');
+    if (exportCombinedReportBtn) {
+        exportCombinedReportBtn.addEventListener('click', function() {
+            if (window.exportCombinedReportToExcel) {
+                window.exportCombinedReportToExcel();
+            }
+        });
+    }
 }
 
-// Evento para exportar reporte combinado
-const exportCombinedReportBtn = document.getElementById('exportCombinedReport');
-if (exportCombinedReportBtn) {
-    exportCombinedReportBtn.addEventListener('click', function() {
-        if (window.exportCombinedReportToExcel) {
-            window.exportCombinedReportToExcel();
-        }
-    });
-}
 // Respaldar todos los datos
 function backupAllData() {
     try {
@@ -162,7 +164,7 @@ function backupAllData() {
             'ID': user.id,
             'Nombre': user.name,
             'Documento': user.document || '',
-            'Fecha Nacimiento': user.birthdate || '',
+            'Fecha Nacimiento': formatDateForExcel(user.birthdate) || '',
             'Telefono': user.phone || '',
             'EPS': user.eps || '',
             'RH': user.rh || '',
@@ -172,7 +174,7 @@ function backupAllData() {
             'Clase': user.classTime || '',
             'Tipo Afiliacion': user.affiliationType || '',
             'Estado': user.status || 'active',
-            'Fecha Registro': user.createdAt || ''
+            'Fecha Registro': formatDateForExcel(user.createdAt) || ''
         }));
         
         // Para asistencias, necesitamos obtener el nombre del usuario
@@ -181,10 +183,10 @@ function backupAllData() {
             return {
                 'ID': record.id,
                 'UsuarioID': record.userId,
-                'Fecha': record.date,
+                'Fecha': formatDateForExcel(record.date),
                 'Usuario': user.name,
                 'Estado': record.status || 'presente',
-                'Fecha Registro': record.registeredAt || ''
+                'Fecha Registro': formatDateForExcel(record.registeredAt) || ''
             };
         });
         
@@ -194,14 +196,14 @@ function backupAllData() {
             return {
                 'ID': record.id,
                 'UsuarioID': record.userId,
-                'Fecha Pago': record.paymentDate,
-                'Fecha Inicio': record.startDate,
-                'Fecha Fin': record.endDate,
+                'Fecha Pago': formatDateForExcel(record.paymentDate),
+                'Fecha Inicio': formatDateForExcel(record.startDate),
+                'Fecha Fin': formatDateForExcel(record.endDate),
                 'Usuario': user.name,
                 'Monto': record.amount,
                 'Tipo Pago': record.paymentType || '',
                 'Descripción': record.description || '',
-                'Fecha Registro': record.registeredAt || ''
+                'Fecha Registro': formatDateForExcel(record.registeredAt) || ''
             };
         });
         
@@ -267,52 +269,19 @@ function restoreDataFromFile() {
                 return;
             }
             
-            // Convertir a JSON
+            // Convertir a JSON (manteniendo los nombres originales en español)
             const usersRaw = XLSX.utils.sheet_to_json(usersSheet);
             const attendanceRaw = XLSX.utils.sheet_to_json(attendanceSheet);
             const incomeRaw = XLSX.utils.sheet_to_json(incomeSheet);
             
             console.log(`Datos leídos: ${usersRaw.length} usuarios, ${attendanceRaw.length} asistencias, ${incomeRaw.length} pagos`);
             
-            // Convertir datos a formato de aplicación
-            const users = usersRaw.map(item => ({
-                id: item.ID || item.id,
-                name: item.Nombre || item.name,
-                document: item.Documento || item.document || '',
-                birthdate: item['Fecha Nacimiento'] || item.birthdate || '',
-                phone: item.Telefono || item.phone || '',
-                eps: item.EPS || item.eps || '',
-                rh: item.RH || item.rh || '',
-                pathology: item.Patologia || item.pathology || '',
-                emergencyContact: item['Contacto Emergencia'] || item.emergencyContact || '',
-                emergencyPhone: item['Telefono Emergencia'] || item.emergencyPhone || '',
-                classTime: item.Clase || item.classTime || '',
-                affiliationType: item['Tipo Afiliacion'] || item.affiliationType || '',
-                status: item.Estado || item.status || 'active',
-                createdAt: item['Fecha Registro'] || item.createdAt || new Date().toISOString()
-            }));
+            // Limpiar y normalizar datos
+            const cleanedUsers = cleanRestoredData(usersRaw, 'users');
+            const cleanedAttendance = cleanRestoredData(attendanceRaw, 'attendance');
+            const cleanedIncome = cleanRestoredData(incomeRaw, 'income');
             
-            const attendance = attendanceRaw.map(item => ({
-                id: item.ID || item.id,
-                userId: item.UsuarioID || item.userId,
-                date: item.Fecha || item.date,
-                status: item.Estado || item.status || 'presente',
-                registeredAt: item['Fecha Registro'] || item.registeredAt || new Date().toISOString()
-            }));
-            
-            const income = incomeRaw.map(item => ({
-                id: item.ID || item.id,
-                userId: item.UsuarioID || item.userId,
-                paymentDate: item['Fecha Pago'] || item.paymentDate,
-                startDate: item['Fecha Inicio'] || item.startDate,
-                endDate: item['Fecha Fin'] || item.endDate,
-                paymentType: item['Tipo Pago'] || item.paymentType || '',
-                amount: item.Monto || item.amount || 0,
-                description: item.Descripción || item.description || '',
-                registeredAt: item['Fecha Registro'] || item.registeredAt || new Date().toISOString()
-            }));
-            
-            console.log(`Datos convertidos: ${users.length} usuarios, ${attendance.length} asistencias, ${income.length} pagos`);
+            console.log(`Datos normalizados: ${cleanedUsers.length} usuarios, ${cleanedAttendance.length} asistencias, ${cleanedIncome.length} pagos`);
             
             // Verificar si se deben reemplazar los datos existentes
             const replaceData = document.getElementById('replaceData').checked;
@@ -321,9 +290,9 @@ function restoreDataFromFile() {
                 console.log("Reemplazando datos existentes...");
                 
                 // Sobrescribir datos
-                Storage.set(STORAGE_KEYS.USERS, users);
-                Storage.set(STORAGE_KEYS.ATTENDANCE, attendance);
-                Storage.set(STORAGE_KEYS.INCOME, income);
+                Storage.set(STORAGE_KEYS.USERS, cleanedUsers);
+                Storage.set(STORAGE_KEYS.ATTENDANCE, cleanedAttendance);
+                Storage.set(STORAGE_KEYS.INCOME, cleanedIncome);
             } else {
                 console.log("Fusionando con datos existentes...");
                 
@@ -334,15 +303,15 @@ function restoreDataFromFile() {
                 
                 // Fusionar usuarios: evitar duplicados por id
                 const mergedUsers = [...existingUsers];
-                users.forEach(newUser => {
+                cleanedUsers.forEach(newUser => {
                     if (!existingUsers.find(u => u.id == newUser.id)) {
                         mergedUsers.push(newUser);
                     }
                 });
                 
                 // Fusionar asistencias y pagos: agregar todos los nuevos
-                const mergedAttendance = [...existingAttendance, ...attendance];
-                const mergedIncome = [...existingIncome, ...income];
+                const mergedAttendance = [...existingAttendance, ...cleanedAttendance];
+                const mergedIncome = [...existingIncome, ...cleanedIncome];
                 
                 Storage.set(STORAGE_KEYS.USERS, mergedUsers);
                 Storage.set(STORAGE_KEYS.ATTENDANCE, mergedAttendance);
@@ -381,3 +350,7 @@ function restoreDataFromFile() {
     
     reader.readAsArrayBuffer(file);
 }
+
+// Exponer funciones globales
+window.backupAllData = backupAllData;
+window.restoreDataFromFile = restoreDataFromFile;
