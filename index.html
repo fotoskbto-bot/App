@@ -1206,6 +1206,44 @@
         <span id="backupNotificationText">Respaldo automático realizado</span>
     </div>
 
+        <!-- Modal para enviar recordatorio de inasistencia -->
+    <div class="modal fade" id="absenceReminderModal" tabindex="-1" aria-labelledby="absenceReminderModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header modal-header-gradient">
+                    <h5 class="modal-title" id="absenceReminderModalLabel">
+                        <i class="fab fa-whatsapp"></i> Enviar Recordatorio de Inasistencia
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body reminder-modal">
+                    <div id="reminderUserInfo">
+                        <!-- Información del usuario se cargará aquí -->
+                    </div>
+                    <div class="mb-3">
+                        <label for="reminderMessage" class="form-label">Mensaje personalizado</label>
+                        <textarea class="form-control" id="reminderMessage" rows="4"></textarea>
+                    </div>
+                    <div class="message-preview">
+                        <strong>Vista previa:</strong>
+                        <div id="reminderPreview"></div>
+                    </div>
+                    <div class="form-check mt-3">
+                        <input class="form-check-input" type="checkbox" id="includeMembershipInfo" checked>
+                        <label class="form-check-label" for="includeMembershipInfo">
+                            Incluir información de membresía
+                        </label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-success" id="sendReminderBtn">
+                        <i class="fab fa-whatsapp"></i> Enviar Recordatorio
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
