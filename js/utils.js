@@ -1,17 +1,4 @@
 // Funciones de utilidad
-const cleanedUsers = cleanRestoredData(users, 'users');
-const cleanedAttendance = cleanRestoredData(attendance, 'attendance');
-const cleanedIncome = cleanRestoredData(income, 'income');
-
-// Luego usa las versiones limpiadas en lugar de las originales
-if (replaceData) {
-    console.log("Reemplazando datos existentes...");
-    
-    // Sobrescribir datos con versiones limpiadas
-    Storage.set(STORAGE_KEYS.USERS, cleanedUsers);
-    Storage.set(STORAGE_KEYS.ATTENDANCE, cleanedAttendance);
-    Storage.set(STORAGE_KEYS.INCOME, cleanedIncome);
-} else {
 
 // Mostrar notificación de respaldo
 export function showBackupNotification(message) {
@@ -132,27 +119,56 @@ export function formatCurrency(amount) {
 // Formatear fecha
 export function formatDate(dateString) {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    // Ajustar por zona horaria
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-    return date.toLocaleDateString('es-CO', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-    });
+    try {
+        const date = new Date(dateString);
+        // Ajustar por zona horaria
+        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+        return date.toLocaleDateString('es-CO', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+    } catch (error) {
+        console.error('Error formateando fecha:', dateString, error);
+        return '';
+    }
 }
 
 // Formatear fecha para WhatsApp
 export function formatDateForWhatsApp(dateString) {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    // Ajustar por zona horaria
-    date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
-    return date.toLocaleDateString('es-CO', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric'
-    });
+    try {
+        const date = new Date(dateString);
+        // Ajustar por zona horaria
+        date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+        return date.toLocaleDateString('es-CO', {
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        });
+    } catch (error) {
+        console.error('Error formateando fecha para WhatsApp:', dateString, error);
+        return '';
+    }
+}
+
+// Formatear fecha para Excel (formato dd/mm/aaaa)
+export function formatDateForExcel(dateString) {
+    if (!dateString) return '';
+    
+    try {
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return '';
+        
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = date.getFullYear();
+        
+        return `${day}/${month}/${year}`;
+    } catch (error) {
+        console.error('Error formateando fecha para Excel:', dateString, error);
+        return '';
+    }
 }
 
 // Filtrar lista genérica
@@ -175,7 +191,7 @@ export function excelDateToISO(excelDate) {
         
         // Si ya es un string con formato de fecha
         if (typeof excelDate === 'string') {
-            // Intentar parsear como fecha
+            // Intentar parsear como fecha directamente
             const date = new Date(excelDate);
             if (!isNaN(date.getTime())) {
                 return date.toISOString().split('T')[0];
@@ -187,7 +203,7 @@ export function excelDateToISO(excelDate) {
                 if (parts.length === 3) {
                     const day = parts[0].padStart(2, '0');
                     const month = parts[1].padStart(2, '0');
-                    const year = parts[2];
+                    const year = parts[2].length === 2 ? `20${parts[2]}` : parts[2];
                     return `${year}-${month}-${day}`;
                 }
             }
@@ -201,12 +217,36 @@ export function excelDateToISO(excelDate) {
                         // Formato YYYY-MM-DD
                         return excelDate;
                     } else {
-                        // Formato MM-DD-YYYY
-                        const year = parts[2];
-                        const month = parts[0].padStart(2, '0');
-                        const day = parts[1].padStart(2, '0');
-                        return `${year}-${month}-${day}`;
+                        // Formato MM-DD-YYYY o DD-MM-YYYY
+                        // Intentar determinar el formato
+                        if (parts[0].length === 2 && parts[1].length === 2 && parts[2].length === 4) {
+                            // Si el primer número es mayor a 12, probablemente es día
+                            if (parseInt(parts[0]) > 12) {
+                                // Formato DD-MM-YYYY
+                                const day = parts[0].padStart(2, '0');
+                                const month = parts[1].padStart(2, '0');
+                                const year = parts[2];
+                                return `${year}-${month}-${day}`;
+                            } else {
+                                // Formato MM-DD-YYYY
+                                const month = parts[0].padStart(2, '0');
+                                const day = parts[1].padStart(2, '0');
+                                const year = parts[2];
+                                return `${year}-${month}-${day}`;
+                            }
+                        }
                     }
+                }
+            }
+            
+            // Si es formato aaaa/mm/dd
+            if (excelDate.includes('/') && excelDate.split('/')[0].length === 4) {
+                const parts = excelDate.split('/');
+                if (parts.length === 3) {
+                    const year = parts[0];
+                    const month = parts[1].padStart(2, '0');
+                    const day = parts[2].padStart(2, '0');
+                    return `${year}-${month}-${day}`;
                 }
             }
         }
@@ -241,6 +281,12 @@ export function normalizeDate(dateValue) {
             return dateValue;
         }
         
+        // Si es una fecha válida pero en otro formato
+        const date = new Date(dateValue);
+        if (!isNaN(date.getTime())) {
+            return date.toISOString().split('T')[0];
+        }
+        
         // Usar la función de conversión de Excel
         return excelDateToISO(dateValue);
     } catch (error) {
@@ -249,38 +295,31 @@ export function normalizeDate(dateValue) {
     }
 }
 
-// Formatear fecha para Excel (formato dd/mm/aaaa)
-export function formatDateForExcel(dateString) {
-    if (!dateString) return '';
-    
-    try {
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) return '';
-        
-        const day = date.getDate().toString().padStart(2, '0');
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const year = date.getFullYear();
-        
-        return `${day}/${month}/${year}`;
-    } catch (error) {
-        console.error('Error formateando fecha para Excel:', dateString, error);
-        return '';
-    }
-}    
-
-// Agrega esta función en utils.js para limpiar y validar datos:
-
+// Limpiar y validar datos restaurados
 export function cleanRestoredData(data, type) {
     if (!Array.isArray(data)) return [];
     
     return data.map(item => {
+        if (!item) return item;
+        
         // Para usuarios
         if (type === 'users') {
             return {
                 ...item,
-                birthdate: normalizeDate(item.birthdate),
-                status: item.status === 'active' || item.status === 'activo' ? 'active' : 'inactive',
-                createdAt: normalizeDate(item.createdAt) || new Date().toISOString()
+                id: item.id || item.ID || Date.now() + Math.random(),
+                name: item.name || item.Nombre || '',
+                document: item.document || item.Documento || '',
+                birthdate: normalizeDate(item.birthdate || item['Fecha Nacimiento']),
+                phone: item.phone || item.Telefono || '',
+                eps: item.eps || item.EPS || '',
+                rh: item.rh || item.RH || '',
+                pathology: item.pathology || item.Patologia || '',
+                emergencyContact: item.emergencyContact || item['Contacto Emergencia'] || '',
+                emergencyPhone: item.emergencyPhone || item['Telefono Emergencia'] || '',
+                classTime: item.classTime || item.Clase || '',
+                affiliationType: item.affiliationType || item['Tipo Afiliacion'] || '',
+                status: (item.status || item.Estado || 'active').toLowerCase(),
+                createdAt: normalizeDate(item.createdAt || item['Fecha Registro']) || new Date().toISOString()
             };
         }
         
@@ -288,9 +327,11 @@ export function cleanRestoredData(data, type) {
         if (type === 'attendance') {
             return {
                 ...item,
-                date: normalizeDate(item.date),
-                status: item.status === 'presente' || item.status === 'present' ? 'presente' : 'ausente',
-                registeredAt: normalizeDate(item.registeredAt) || new Date().toISOString()
+                id: item.id || item.ID || Date.now() + Math.random(),
+                userId: item.userId || item.UsuarioID || '',
+                date: normalizeDate(item.date || item.Fecha),
+                status: (item.status || item.Estado || 'presente').toLowerCase(),
+                registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro']) || new Date().toISOString()
             };
         }
         
@@ -298,15 +339,18 @@ export function cleanRestoredData(data, type) {
         if (type === 'income') {
             return {
                 ...item,
-                paymentDate: normalizeDate(item.paymentDate),
-                startDate: normalizeDate(item.startDate),
-                endDate: normalizeDate(item.endDate),
-                amount: parseFloat(item.amount) || 0,
-                registeredAt: normalizeDate(item.registeredAt) || new Date().toISOString()
+                id: item.id || item.ID || Date.now() + Math.random(),
+                userId: item.userId || item.UsuarioID || '',
+                paymentDate: normalizeDate(item.paymentDate || item['Fecha Pago']),
+                startDate: normalizeDate(item.startDate || item['Fecha Inicio']),
+                endDate: normalizeDate(item.endDate || item['Fecha Fin']),
+                paymentType: item.paymentType || item['Tipo Pago'] || '',
+                amount: parseFloat(item.amount || item.Monto || 0),
+                description: item.description || item.Descripción || '',
+                registeredAt: normalizeDate(item.registeredAt || item['Fecha Registro']) || new Date().toISOString()
             };
         }
         
         return item;
     });
-}
 }
