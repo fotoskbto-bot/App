@@ -164,7 +164,7 @@ function backupAllData() {
             'ID': user.id,
             'Nombre': user.name,
             'Documento': user.document || '',
-            'Fecha Nacimiento': formatDateForExcel(user.birthdate) || '',
+            'Fecha Nacimiento': user.birthdate || '',
             'Telefono': user.phone || '',
             'EPS': user.eps || '',
             'RH': user.rh || '',
@@ -183,7 +183,7 @@ function backupAllData() {
             return {
                 'ID': record.id,
                 'UsuarioID': record.userId,
-                'Fecha': formatDateForExcel(record.date),
+                'Fecha': record.date || '',
                 'Usuario': user.name,
                 'Estado': record.status || 'presente',
                 'Fecha Registro': formatDateForExcel(record.registeredAt) || ''
@@ -196,9 +196,9 @@ function backupAllData() {
             return {
                 'ID': record.id,
                 'UsuarioID': record.userId,
-                'Fecha Pago': formatDateForExcel(record.paymentDate),
-                'Fecha Inicio': formatDateForExcel(record.startDate),
-                'Fecha Fin': formatDateForExcel(record.endDate),
+                'Fecha Pago': record.paymentDate || '',
+                'Fecha Inicio': record.startDate || '',
+                'Fecha Fin': record.endDate || '',
                 'Usuario': user.name,
                 'Monto': record.amount,
                 'Tipo Pago': record.paymentType || '',
