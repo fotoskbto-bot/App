@@ -348,3 +348,17 @@ export function reloadUsersFromStorage() {
     loadUsers();
     updateUserSelects();
 }
+
+export function getUserMembershipInfo(userId) {
+    const user = getUserById(userId);
+    if (!user) return null;
+    
+    // Esta función se complementará con la información de pagos
+    return {
+        user: user,
+        lastPayment: null, // Se actualizará desde income.js
+        expired: false,
+        daysExpired: 0,
+        attendanceAfterExpiry: 0
+    };
+}
