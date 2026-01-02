@@ -1,6 +1,1 @@
-export const DOM = {};
-export function cacheDOM(){
- DOM.loginView=document.getElementById('loginView');
- DOM.appView=document.getElementById('appView');
- DOM.loginForm=document.getElementById('loginForm');
-}
+export const DOM={}; export function cacheDOM(){DOM.loginView=document.getElementById('loginView');DOM.appView=document.getElementById('appView');DOM.restrictedView=document.getElementById('restrictedView');DOM.adminView=document.getElementById('adminView');DOM.loginForm=document.getElementById('loginForm');DOM.logoutBtn=document.getElementById('logoutBtn');DOM.email=document.getElementById('email');DOM.password=document.getElementById('password');}

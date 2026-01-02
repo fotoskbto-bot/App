@@ -1,0 +1,1 @@
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js'; export let app; export function initFirebase(){const firebaseConfig={apiKey:'TU_API_KEY',authDomain:'TU_AUTH_DOMAIN',projectId:'TU_PROJECT_ID',appId:'TU_APP_ID'}; app=initializeApp(firebaseConfig);}

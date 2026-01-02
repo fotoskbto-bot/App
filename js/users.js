@@ -1,6 +1,1 @@
-export function initUsers(){
- const session=JSON.parse(localStorage.getItem('session'));
- if(session.role!=='admin'){
-   document.body.innerHTML='<h3 class="text-center mt-5">Acceso restringido</h3>';
- }
-}
+import { DOM } from './dom.js'; export function initUsers(){const role=localStorage.getItem('role')||'coach'; if(role!=='admin'){DOM.adminView.style.display='none';DOM.restrictedView.style.display='block';return;} DOM.restrictedView.style.display='none';DOM.adminView.style.display='block';}
