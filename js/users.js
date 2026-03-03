@@ -1,1 +1,0 @@
-import { DOM } from './dom.js'; export function initUsers(){const role=localStorage.getItem('role')||'coach'; if(role!=='admin'){DOM.adminView.style.display='none';DOM.restrictedView.style.display='block';return;} DOM.restrictedView.style.display='none';DOM.adminView.style.display='block';}

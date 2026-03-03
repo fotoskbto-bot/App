@@ -1,1 +1,0 @@
-import { cacheDOM } from './dom.js'; import { initFirebase } from './firebase.js'; import { initAuth } from './firebase-auth.js'; import { initUsers } from './users.js'; document.addEventListener('DOMContentLoaded',()=>{cacheDOM();initFirebase();initAuth(()=>{initUsers();});});
